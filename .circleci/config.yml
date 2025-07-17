@@ -3,43 +3,38 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/base:stable
+      - image: cimg/python:3.11  # Use any suitable Python version
+
     steps:
       - checkout
 
       - run:
-          name: Install AWS CLI
+          name: Install AWS CLI & SSH
           command: |
-            sudo apt update && sudo apt install -y awscli
+            sudo apt update
+            sudo apt install -y awscli openssh-client
 
       - run:
-          name: Retrieve SSH Key from Parameter Store
+          name: Fetch private SSH key from AWS SSM
           command: |
-            mkdir -p ~/.ssh
-            aws ssm get-parameter --name "circleci-ec2-ssh-key" \
+            aws ssm get-parameter \
+              --name "circleci-ec2-ssh-key" \
               --with-decryption \
-              --region $AWS_REGION \
-              --query 'Parameter.Value' \
-              --output text > ~/.ssh/id_rsa
-            chmod 600 ~/.ssh/id_rsa
-            ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+              --region "$AWS_REGION" \
+              --query "Parameter.Value" \
+              --output text > ~/ec2_key.pem
+            chmod 600 ~/ec2_key.pem
 
       - run:
-          name: Copy code to EC2
+          name: Deploy to EC2
           command: |
-            scp -r . "$EC2_USER@$EC2_HOST:/home/$EC2_USER/app"
-
-      - run:
-          name: Deploy App on EC2
-          command: |
-            ssh "$EC2_USER@$EC2_HOST" << 'EOF'
-              cd /home/$EC2_USER/app
-              pip install -r requirements.txt
+            ssh -o StrictHostKeyChecking=no -i ~/ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
+              cd /home/ec2-user/app
+              pip3 install -r requirements.txt
               nohup python3 app.py > app.log 2>&1 &
             EOF
 
 workflows:
-  version: 2
   deploy_to_ec2:
     jobs:
       - deploy
