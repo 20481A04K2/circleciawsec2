@@ -3,16 +3,16 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/python:3.10  # Includes Python, pip, and SSH tools
+      - image: amazon/aws-cli
     environment:
       AWS_REGION: ap-south-1
     steps:
       - checkout
 
       - run:
-          name: Install AWS CLI
+          name: Install Git and Python (for EC2 if needed)
           command: |
-            sudo apt update && sudo apt install -y awscli
+            yum install -y git python3 || sudo apt-get install -y git python3
 
       - run:
           name: Retrieve SSH private key from AWS SSM
@@ -25,22 +25,27 @@ jobs:
               --with-decryption \
               --query "Parameter.Value" \
               --output text > ec2_key.pem
-            chmod 400 ec2_key.pem
+            chmod 600 ec2_key.pem
 
       - run:
-          name: SSH and Deploy
+          name: SSH into EC2 and deploy app
           command: |
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
-              mkdir -p ~/app
-              cd ~/app
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" \<< 'EOF'
+              set -e
+              mkdir -p /home/ec2-user/app
+              cd /home/ec2-user/app
+
               if [ ! -d .git ]; then
                 git clone https://github.com/20481A04K2/circleciawsec2.git .
               else
                 git pull
               fi
-              sudo apt-get update
-              sudo apt-get install -y python3-pip
+
               pip3 install flask
+
+              # Kill previous app if running
+              pkill -f app.py || true
+
               nohup python3 app.py > app.log 2>&1 &
             EOF
 
