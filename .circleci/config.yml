@@ -28,32 +28,41 @@ jobs:
             chmod 600 ec2_key.pem
 
       - run:
-          name: SSH into EC2 and deploy app
+          name: SSH into EC2 and deploy app with nohup
           command: |
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" \<< 'EOF'
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
               set -e
+
               mkdir -p /home/ubuntu/app
               cd /home/ubuntu/app
 
+              # Remove old app.py if exists
+              rm -f app.py
+
+              # Clone or pull latest code
               if [ ! -d .git ]; then
-               git clone https://github.com/20481A04K2/circleciawsec2.git .
+                git clone https://github.com/20481A04K2/circleciawsec2.git .
               else
                 git pull
               fi
+
+              # Install Python and Flask
               if ! command -v python3 &>/dev/null; then
-               sudo apt update
-               sudo apt install -y python3
+                sudo apt update
+                sudo apt install -y python3
               fi
 
               if ! command -v pip3 &>/dev/null; then
-               sudo apt install -y python3-pip
+                sudo apt install -y python3-pip
               fi
+
               pip3 install flask
 
-              # Kill previous app if running
+              # Kill previous Flask app if running
               pkill -f app.py || true
 
-              nohup sudo python3 app.py > app.log 2>&1 &
+              # Run Flask app in background on port 5000
+              nohup python3 app.py > app.log 2>&1 &
             EOF
 
 workflows:
