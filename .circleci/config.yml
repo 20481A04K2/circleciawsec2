@@ -3,56 +3,30 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: amazon/aws-cli
-    environment:
-      AWS_REGION: ap-south-1
+      - image: cimg/python:3.10
     steps:
       - checkout
 
       - run:
-          name: Install Git and Python (for CircleCI container)
+          name: Save SSH key
           command: |
-            yum install -y git python3 || sudo apt-get install -y git python3
+            echo "$PEM" > ec2_key.pem
+            chmod 400 ec2_key.pem
 
       - run:
-          name: Retrieve SSH private key from AWS SSM
+          name: Deploy to EC2
           command: |
-            aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
-            aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-            aws configure set region "$AWS_REGION"
-            aws ssm get-parameter \
-              --name "circleci-ec2-ssh-key" \
-              --with-decryption \
-              --query "Parameter.Value" \
-              --output text > ec2_key.pem
-            chmod 600 ec2_key.pem
-
-      - run:
-          name: SSH into EC2 and deploy app
-          command: |
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" bash << 'EOF'
-              set -e
-              APP_DIR=~/app
-              mkdir -p "$APP_DIR"
-              cd "$APP_DIR"
-
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" '
+              mkdir -p /home/ec2-user/app
+              cd /home/ec2-user/app
               if [ ! -d .git ]; then
                 git clone https://github.com/20481A04K2/circleciawsec2.git .
               else
                 git pull
               fi
-
-              # Install Python and pip if not available
-              sudo apt-get update || sudo yum update -y
-              sudo apt-get install -y python3 python3-pip || sudo yum install -y python3 python3-pip
-
-              # Install required Python packages (add your packages here)
-              pip3 install flask boto3
-
-              # Restart app
-              pkill -f app.py || true
+              pip3 install -r requirements.txt
               nohup python3 app.py > app.log 2>&1 &
-            EOF
+            '
 
 workflows:
   deploy_to_ec2:
