@@ -53,7 +53,7 @@ jobs:
               # Kill previous app if running
               pkill -f app.py || true
 
-              nohup python3 app.py > app.log 2>&1 &
+              nohup sudo python3 app.py > app.log 2>&1 &
             EOF
 
 workflows:
