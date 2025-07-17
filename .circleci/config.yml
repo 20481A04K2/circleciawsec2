@@ -1,3 +1,42 @@
 
 
 
+version: 2.1
+
+jobs:
+  deploy:
+    docker:
+      - image: cimg/base:stable  # Base image with Bash and tools
+    steps:
+      - checkout
+
+      - run:
+          name: Install AWS CLI
+          command: |
+            sudo apt update && sudo apt install -y awscli
+
+      - run:
+          name: Retrieve SSH Key from Parameter Store
+          command: |
+            mkdir -p ~/.ssh
+            aws ssm get-parameter --name "circleci-ec2-ssh-key" \
+              --with-decryption \
+              --region $AWS_REGION \
+              --query 'Parameter.Value' \
+              --output text > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - run:
+          name: Copy code to EC2
+          command: |
+            scp -r . "$EC2_USER@$EC2_HOST:/home/$EC2_USER/app"
+
+      - run:
+          name: Deploy App on EC2 (pip install + run app.py)
+          command: |
+            ssh "$EC2_USER@$EC2_HOST" << 'EOF'
+              cd /home/$EC2_USER/app
+              pip install -r requirements.txt
+              nohup python3 app.py > app.log 2>&1 &
+            EOF
