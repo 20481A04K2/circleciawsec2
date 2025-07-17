@@ -1,13 +1,9 @@
-
-
-
-
 version: 2.1
 
 jobs:
   deploy:
     docker:
-      - image: cimg/base:stable  # Base image with Bash and tools
+      - image: cimg/base:stable
     steps:
       - checkout
 
@@ -34,10 +30,16 @@ jobs:
             scp -r . "$EC2_USER@$EC2_HOST:/home/$EC2_USER/app"
 
       - run:
-          name: Deploy App on EC2 (pip install + run app.py)
+          name: Deploy App on EC2
           command: |
             ssh "$EC2_USER@$EC2_HOST" << 'EOF'
               cd /home/$EC2_USER/app
               pip install -r requirements.txt
               nohup python3 app.py > app.log 2>&1 &
             EOF
+
+workflows:
+  version: 2
+  deploy_to_ec2:
+    jobs:
+      - deploy
