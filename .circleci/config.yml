@@ -3,36 +3,42 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/python:3.11  # Use any suitable Python version
-
+      - image: cimg/python:3.10
     steps:
       - checkout
 
       - run:
-          name: Install AWS CLI & SSH
+          name: Install AWS CLI
           command: |
-            sudo apt update
-            sudo apt install -y awscli openssh-client
+            sudo apt-get update
+            sudo apt-get install -y unzip curl
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            aws --version
 
       - run:
-          name: Fetch private SSH key from AWS SSM
+          name: Retrieve SSH private key from SSM
           command: |
+            aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+            aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+            aws configure set region "$AWS_REGION"
             aws ssm get-parameter \
               --name "circleci-ec2-ssh-key" \
               --with-decryption \
-              --region "$AWS_REGION" \
               --query "Parameter.Value" \
-              --output text > ~/ec2_key.pem
-            chmod 600 ~/ec2_key.pem
+              --output text > ec2_key.pem
+            chmod 600 ec2_key.pem
 
       - run:
-          name: Deploy to EC2
+          name: SSH and Deploy App
           command: |
-            ssh -o StrictHostKeyChecking=no -i ~/ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" bash << 'EOSSH'
               cd /home/ec2-user/app
+              git pull
               pip3 install -r requirements.txt
               nohup python3 app.py > app.log 2>&1 &
-            EOF
+            EOSSH
 
 workflows:
   deploy_to_ec2:
