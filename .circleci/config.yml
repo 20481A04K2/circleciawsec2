@@ -5,14 +5,14 @@ jobs:
     docker:
       - image: amazon/aws-cli
     environment:
-      AWS_REGION: ap-south-1  # or your region
+      AWS_REGION: ap-south-1
     steps:
       - checkout
 
       - run:
-          name: Install Dependencies
+          name: Install Git and Python (EC2 needs it)
           command: |
-            yum install -y unzip curl openssh git python3-pip
+            yum install -y git python3 || sudo apt-get install -y git python3
 
       - run:
           name: Retrieve SSH private key from AWS SSM
@@ -20,7 +20,6 @@ jobs:
             aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
             aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
             aws configure set region "$AWS_REGION"
-
             aws ssm get-parameter \
               --name "circleci-ec2-ssh-key" \
               --with-decryption \
@@ -29,17 +28,18 @@ jobs:
             chmod 600 ec2_key.pem
 
       - run:
-          name: SSH into EC2 and Deploy App
+          name: SSH into EC2 and deploy app
           command: |
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" 'bash -s' <<'EOF'
-              set -e
-              cd /home/ec2-user/app || git clone https://github.com/20481A04K2/circleciawsec2.git /home/ec2-user/app && cd /home/ec2-user/app
-              git pull
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" '
+              cd /home/ec2-user/app || mkdir -p /home/ec2-user/app && cd /home/ec2-user/app
+              if [ ! -d .git ]; then
+                git clone https://github.com/20481A04K2/circleciawsec2.git .
+              else
+                git pull
+              fi
               pip3 install -r requirements.txt
-              pkill -f app.py || true
               nohup python3 app.py > app.log 2>&1 &
-              echo "✅ Deployment Complete"
-            EOF
+            '
 
 workflows:
   deploy_to_ec2:
