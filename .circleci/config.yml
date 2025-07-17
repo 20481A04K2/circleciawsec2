@@ -36,11 +36,18 @@ jobs:
               cd /home/ubuntu/app
 
               if [ ! -d .git ]; then
-                git clone https://github.com/20481A04K2/circleciawsec2.git .
+               git clone https://github.com/20481A04K2/circleciawsec2.git .
               else
                 git pull
               fi
+              if ! command -v python3 &>/dev/null; then
+               sudo apt update
+               sudo apt install -y python3
+              fi
 
+              if ! command -v pip3 &>/dev/null; then
+               sudo apt install -y python3-pip
+              fi
               pip3 install flask
 
               # Kill previous app if running
