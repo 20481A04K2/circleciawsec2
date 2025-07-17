@@ -3,30 +3,46 @@ version: 2.1
 jobs:
   deploy:
     docker:
-      - image: cimg/python:3.10
+      - image: cimg/python:3.10  # Includes Python, pip, and SSH tools
+    environment:
+      AWS_REGION: ap-south-1
     steps:
       - checkout
 
       - run:
-          name: Save SSH key
+          name: Install AWS CLI
           command: |
-            echo "$PEM" > ec2_key.pem
+            sudo apt update && sudo apt install -y awscli
+
+      - run:
+          name: Retrieve SSH private key from AWS SSM
+          command: |
+            aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+            aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+            aws configure set region "$AWS_REGION"
+            aws ssm get-parameter \
+              --name "circleci-ec2-ssh-key" \
+              --with-decryption \
+              --query "Parameter.Value" \
+              --output text > ec2_key.pem
             chmod 400 ec2_key.pem
 
       - run:
-          name: Deploy to EC2
+          name: SSH and Deploy
           command: |
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" '
-              mkdir -p /home/ec2-user/app
-              cd /home/ec2-user/app
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" << 'EOF'
+              mkdir -p ~/app
+              cd ~/app
               if [ ! -d .git ]; then
                 git clone https://github.com/20481A04K2/circleciawsec2.git .
               else
                 git pull
               fi
-              pip3 install -r requirements.txt
+              sudo apt-get update
+              sudo apt-get install -y python3-pip
+              pip3 install flask
               nohup python3 app.py > app.log 2>&1 &
-            '
+            EOF
 
 workflows:
   deploy_to_ec2:
