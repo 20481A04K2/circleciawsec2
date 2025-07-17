@@ -32,8 +32,8 @@ jobs:
           command: |
             ssh -o StrictHostKeyChecking=no -i ec2_key.pem "$EC2_USER@$EC2_HOST" \<< 'EOF'
               set -e
-              mkdir -p /home/ec2-user/app
-              cd /home/ec2-user/app
+              mkdir -p /home/ubuntu/app
+              cd /home/ubuntu/app
 
               if [ ! -d .git ]; then
                 git clone https://github.com/20481A04K2/circleciawsec2.git .
